@@ -40,7 +40,6 @@ typedef struct material {
     // 1 - GAS 
     // 2 - LIQUID
     // 4 - SOLID
-    // i chose to use powers of 2 to easily test type using a mask
     char phase;
 
     Color color;
@@ -68,7 +67,6 @@ const material_t materials[MATERIAL_COUNT] = {
 int mod(int a, int b);
 float d(Vector2 a, Vector2 b);
 float frand();
-float nfrand();
 
 void DrawParticle(material_t particle);
 
@@ -87,7 +85,6 @@ int main() {
 	.height = 90,
     };
 
-
     const float virtual_ratio = (float)screen.width/game.width;
 
     typedef enum {
@@ -105,7 +102,7 @@ int main() {
     };
 
     material_t environment[(int)game.width][(int)game.height];
-    material_t environment_buffer[(int)game.width][(int)game.height];
+    bool updated[(int)game.width][(int)game.height];
     for (int x = 0; x < game.width; x++)
 	for (int y = 0; y < game.height; y++)
 	    environment[x][y] = materials[AIR];
@@ -142,106 +139,150 @@ int main() {
 	BeginTextureMode(target);
 	BeginMode2D(camera_game);
 
-	memcpy(environment_buffer, environment, sizeof(environment));
+	memset(updated, false, sizeof(updated));
 	for (int y = game.height-1; y >= 0; y--)
-	    /* for (int y = 0; y < game.height; y++) */
+	/* for (int y = 0; y < game.height; y++) */
+	{
 	    for (int x = 0; x < game.width; x++)
 	    {
 		Vector2 d = {0};
-		material_t *current = &environment_buffer[x][y];
-		material_t *target;
-
-		switch (current->phase)
+		if (!updated[x][y])
 		{
-		    int t;
-		    case GAS:
-			// N
-			d.x = x;
-			d.y = y-1;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density < target->density)
-			    swap(material_t, *target, *current);
+		    /* updated[x][y] = true; */
+		    material_t *current = &environment[x][y];
+		    material_t *target;
 
-			t = current->viscosity*nfrand();
-			// NW & NE
-			d.x = x + t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density < target->density)
-			    swap(material_t, *target, *current);
+		    switch (current->phase)
+		    {
+			int t;
+			case GAS:
+			    // N
+			    d.x = x;
+			    d.y = y-1;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density < target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density < target->density)
-			    swap(material_t, *target, *current);
+			    t = current->viscosity*sin(d.x+d.y+tick);
+			    // NW & NE
+			    d.x = x + t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density < target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			// W & E
-			d.y = y;
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density < target->density)
-			    swap(material_t, *target, *current);
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density < target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density < target->density)
-			    swap(material_t, *target, *current);
+			    // W & E
+			    d.y = y;
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density < target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			break;
-		    case LIQUID:
-			// S
-			d.x = x;
-			d.y = y+1;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density < target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			t = (rand()&1)?-1:1;
-			// SW & SE
-			d.x = x + t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    break;
+			case LIQUID:
+			    // S
+			    d.x = x;
+			    d.y = y+1;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    t = (rand()&1)?-1:1;
+			    // SW & SE
+			    d.x = x + t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			t = current->viscosity*nfrand();
-			// W & E
-			d.y = y;
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    t = current->viscosity*sin(d.x+d.y+tick);
+			    // W & E
+			    d.y = y;
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			break;
-		    case SOLID:
-			d.x = x;
-			d.y = y+1;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			t = (rand()&1)?-1:1;
-			d.x = x + t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
+			    break;
+			case SOLID:
+			    d.x = x;
+			    d.y = y+1;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
 
-			d.x = x - t;
-			target = &environment_buffer[(int)d.x][(int)d.y];
-			if (CheckCollisionPointRec(d, game) && current->density > target->density)
-			    swap(material_t, *target, *current);
-			break;
+			    t = (rand()&1)?-1:1;
+			    d.x = x + t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
+
+			    d.x = x - t;
+			    target = &environment[(int)d.x][(int)d.y];
+			    if (CheckCollisionPointRec(d, game) && current->density > target->density)
+			    {
+				swap(material_t, *target, *current);
+				updated[(int)d.x][(int)d.y] = true;
+			    }
+			    break;
+		    }
 		}
 	    }
-	memcpy(environment, environment_buffer, sizeof(environment));
+	}
 
 	EndMode2D();
 	EndTextureMode();
@@ -313,11 +354,6 @@ int main() {
 float frand()
 {
     return (float)rand()/RAND_MAX;
-}
-
-float nfrand()
-{
-    return (float)2*rand()/RAND_MAX-1;
 }
 
 int mod(int a, int b)
